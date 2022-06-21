@@ -11,4 +11,4 @@ _Adapting stimuli._ Adaptors varied between studies and included both masculiniz
 
 **Qualtrics** - contains .qsf files for all of the studies ran through Qualtrics. 
 
-**Analysis** - contains the raw data used for all 4 studies, as well as cleaned data used for final analysis done in RMarkdown. 
+**Analysis** - contains the data and RMarkdown analysis code used for all 4 studies.
