@@ -1,0 +1,342 @@
+---
+title: "Study 1 Analysis: Women's Voices"
+author: "Kelsey Neuenswander"
+date: "9/17/2021"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+<center>
+## Introduction ##
+</center>
+
+This study investigates the social evaluative implications of sensory adaptation to women's voices. 
+
+**Stimuli.** Test stimuli were audio recordings of 20 young adult women reciting the sentence "Hi, I'm a student at UCLA". Samples were recorded digitally (M-Audio Microtrack recorder, 16-bit amplitude resolution, 44.1 kHz sampling rate) using an AKG E535 condenser microphone placed approximately 15cm from the mouth. Stimuli varied naturally in duration, fundamental frequency ($f_o$), and voice quality.
+
+**Adapting stimuli.** Adaptors included both masculinized and feminized exemplars that would be gender-atypical and gender-typical, respectively, relative to test stimuli. Adaptors were generated from recordings of 5 young adult women producing the same sentence as test stimuli. These recordings were manipulated to be more masculine or more feminine using the VT-Change script in Praat (Boersma & Weenink, 2021). We altered $f_o$, a well-established sexually dimorphic aspect of voice, using PSOLA (Pitch Synchronous Overlap Add) resynthesis. For masculinized versions, $f_o$ values were lowered to 70% of baseline. For feminized versions, $f_o$ was increased to 140% of baseline. 
+
+**Procedure.** We recruited U.S. residents from Prolific. After providing consent, participants were randomly assigned to either the gender-typical (feminized) or gender-atypical (masculinized) adaptation condition. On each trial, participants fist heard an adapting voice followed by a test voice which they judged for attractiveness and femininity (1 = _Not at all_ to 9 = _Extremely_). We also collected perceptions of likability, friendliness, and typicality for future exploratory analyses not reported here. To maintain attention, participants completed a secondary task rating whether the pitch of each adaptor was higher, lower, or identical to the previous adaptor. In total, participants completed 20 trials in pseudo-randomized order, with each adaptor presented four times.
+
+**Hypotheses.** Variability in vocal tract length and laryngeal cavity size create large differences in fundamental frequency for male and female voices (Hillenbrand et al., 1995). Perceivers evaluate men and women with regard to these differences, rating men as more attractive when their voices have low fundamental frequency but women as more attractive when their voices have high fundamental frequency (Puts, 2005; Puts, Barndt, Welling, Dawood, & Burriss, 2011). Therefore, we predicted that adaptation to masculinized voices would produce contrastive aftereffects, making neutral female test voices sound more gender-typical and therefore more attractive. Conversely, adaptation to feminized voices should make neutral female test voices sound less gender-typical and therefore less attractive. 
+
+<center>
+## Analysis ##
+</center>
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+library(lme4)
+library(lmerTest)
+library(mediation)
+library(dplyr)
+library(nlme)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(pastecs)
+library(mosaic)
+library(scales)
+library(PHEindicatormethods) 
+options(scipen=999)
+```
+
+```{r, echo = F}
+library(knitr)
+library(formatR)
+opts_chunk$set(tidy.opts=list(width.cutoff=70),tidy=TRUE)
+```
+
+**Load Data**
+```{r}
+data <- read.csv('study1_data.csv', header=TRUE)
+```
+
+**Factor**
+```{r}
+# participant ID
+data$ID <- factor(data$ID)
+
+# condition
+data$condition <- as.factor(data$condition)
+
+# participant sex
+data$Sex <- as.factor(data$Sex)
+```
+
+**Filter**  
+There were only 3 participants who did not identify as male or female. Because we were interested in investigating the interaction between condition and participant sex, we filtered out participants who did not identify as male or female since the power for detecting an effect with a sample size of 3 is too low. 
+```{r}
+nrow(data)/20
+data <- data %>% filter(Sex == "1" | Sex == "2")
+nrow(data)/20
+```
+
+**Check Data Quality**  
+Group by participant ID and filter out participants with a response range of 1 on any of the dependent variables. 
+```{r}
+#sample size before filtering
+nrow(data)/20
+
+#attraction
+data <- data %>% group_by(ID) %>% 
+  filter((max(attraction) - min(attraction) > 1))
+
+#femininity
+data <- data %>% group_by(ID) %>% 
+  filter((max(femininity) - min(femininity) > 1))
+
+#likability
+data <- data %>% group_by(ID) %>% 
+  filter((max(likability) - min(likability) > 1))
+
+#friends
+data <- data %>% group_by(ID) %>% 
+  filter((max(friends) - min(friends) > 1))
+
+#typicality
+data <- data %>% group_by(ID) %>% 
+  filter((max(typicality) - min(typicality) > 1))
+
+#sample size after filtering
+nrow(data)/20
+```
+
+The original sample size was 182. After filtering participants whose responses did not meet our requirements, the final sample size is 153.
+
+**Demographics**  
+After filtering participants, calculate the demographics of the final sample.
+
+*Sex*
+```{r}
+table(data$Sex)/20   # 1 = male, 2 = female, 3 = other
+```
+
+The majority of the sample is male (52.94%), followed by female (47.06%).
+
+*Race*
+```{r}
+table(data$Race)/20  # 1 = Asian, 2 = Black, 3 = Latino, 4 = White, 5 = Biracial/Other
+```
+
+The majority of the sample is White (62.75%).
+
+*Age*
+```{r}
+stat.desc(data$Age)
+```
+
+The average age is 31.34 years old, with a range from 18 - 66.
+
+# Multilevel Analyses #
+The following analyses are done in a step-wise fashion.
+
+## Attraction ##
+
+**Main Effect: Attraction by Condition (Atypical/Typical)**
+```{r}
+# reference group = atypical condition
+data$condition <-relevel(data$condition, ref = "atypical")
+
+# multilevel model
+model.1 <- lmer(attraction ~ condition + (1|ID) + (1|trial), data=data, na.action = 'na.exclude', control=lmerControl(optimizer = "optimx", calc.derivs = FALSE, optCtrl=list(method = 'nlminb')))
+summary(model.1)
+
+#confidence interval
+ci.1 <- confint(model.1,method="Wald", level=0.95)
+ci.1
+
+# group means
+attraction_condition <- data %>% group_by(condition) %>%
+  summarise(mean = mean(attraction),
+            sd = sd(attraction),
+            n = n(),
+            se = sd(attraction)/sqrt(n()))
+attraction_condition
+```
+
+Test voices were rated as more attractive after adaptation to masculinized voices (*M* = 6.01, *SD* = 1.96) relative to feminized voices (*M* = 5.65, *SD* = 1.92), *t*(150) = -2.09, *p* = .039. 
+
+**Main Effect: Attraction by Participant Sex (Male/Female)**
+```{r}
+# reference group = female participants
+data$Sex <-relevel(data$Sex, ref = "2")
+
+# multilevel model
+model.2 <- lmer(attraction ~ Sex + (1|ID) + (1|trial), data=data, na.action = 'na.exclude', control=lmerControl(optimizer = "optimx", calc.derivs = FALSE, optCtrl=list(method = 'nlminb')))
+summary(model.2)
+
+#confidence interval
+ci.2 <- confint(model.2,method="Wald", level=0.95)
+ci.2
+
+# group means
+attraction_Sex <- data %>% group_by(Sex) %>%
+  summarise(mean = mean(attraction),
+            sd = sd(attraction),
+            n = n(),
+            se = sd(attraction)/sqrt(n()))
+attraction_Sex
+```
+
+There is no difference in attraction ratings between male participants (*M* = 5.81, *SD* = 1.96) and female participants (*M* = 5.86, *SD* = 1.93), *t*(151) = -0.26, *p* = .799.
+
+**Interaction: Attraction by Condition (Atypical/Typical) and Participant Sex (Male/Female)**
+```{r fig.height=3, fig.width=5, fig.align="center"}
+# multilevel model
+model.3 <- lmer(attraction ~ condition * Sex + (1|ID) + (1|trial), data=data, na.action = 'na.exclude', control=lmerControl(optimizer = "optimx", calc.derivs = FALSE, optCtrl=list(method = 'nlminb')))
+summary(model.3)
+
+#confidence interval
+ci.3 <- confint(model.3,method="Wald", level=0.95)
+ci.3
+
+# group means
+attraction_total <- data %>% group_by(condition, Sex) %>%
+  summarise(mean = mean(attraction),
+            sd = sd(attraction),
+            n = n(),
+            se = sd(attraction)/sqrt(n()))
+attraction_total
+
+#plot with 95% CI
+attraction_plot <- data %>%
+  group_by(condition, Sex) %>%
+  phe_mean(x = attraction, type = "full", confidence = 0.95) %>%
+  ggplot(aes(x=Sex, y=value, fill=condition)) +
+  geom_bar(stat = "identity", position = "dodge", width = .90) +
+  geom_errorbar(aes(ymin = lowercl, ymax = uppercl), position = position_dodge(.90), width = 0.1) +
+  scale_y_continuous(limits=c(1,7), breaks=seq(1,7,by=1), oob = rescale_none) +
+  scale_fill_brewer(palette = 1) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        text = element_text(size = 10)) + # apply custom minimal theme
+  labs(title = "", x="Participant Sex (1 = Male, 2 = Female)", y="Attraction", fill="Condition")
+
+attraction_plot 
+```
+
+The interaction between condition and participant sex is not significant, *t*(149) = -0.99, *p* = .325. 
+
+## Femininity ##
+
+**Main Effect: Femininity by Condition**
+```{r}
+# multilevel model
+model.4 <- lmer(femininity ~ condition + (1|ID) + (1|trial), data=data, na.action = 'na.exclude', control=lmerControl(optimizer = "optimx", calc.derivs = FALSE, optCtrl=list(method = 'nlminb')))
+summary(model.4)
+
+#confidence interval
+ci.4 <- confint(model.4,method="Wald", level=0.95)
+ci.4
+
+# group means
+femininity_condition <- data %>% group_by(condition) %>%
+  summarise(mean = mean(femininity),
+            sd = sd(femininity),
+            n = n(),
+            se = sd(femininity)/sqrt(n()))
+femininity_condition
+```
+
+Test voices were rated as more feminine after adaptation to masculinized voices (*M* = 6.30, *SD* = 1.91) relative to feminized voices (*M* = 5.80, *SD* = 1.93), *t*(150) = -3.04, *p* = .003. 
+
+**Main Effect: Femininity by Participant Sex**
+```{r}
+#reference group = female
+data$Sex <-relevel(data$Sex, ref = "2")
+
+# multilevel model
+model.5 <- lmer(femininity ~ Sex + (1|ID) + (1|trial), data=data, na.action = 'na.exclude', control=lmerControl(optimizer = "optimx", calc.derivs = FALSE, optCtrl=list(method = 'nlminb')))
+summary(model.5)
+
+#confidence interval
+ci.5 <- confint(model.5,method="Wald", level=0.95)
+ci.5
+
+# group means
+femininity_Sex <- data %>% group_by(Sex) %>%
+  summarise(mean = mean(femininity),
+            sd = sd(femininity),
+            n = n(),
+            se = sd(femininity)/sqrt(n()))
+femininity_Sex
+```
+
+There was no significant difference in femininity ratings between male participants (*M* = 6.09, *SD* = 1.91) and female participants (*M* = 6.01, *SD* = 1.96), *t*(150) = 0.47, *p* = .64. 
+
+**Interaction: Femininity by Condition and Participant Sex**
+```{r fig.height=3, fig.width=5, fig.align="center"}
+# multilevel model
+model.6 <- lmer(femininity ~ condition * Sex + (1|ID) + (1|trial), data=data, na.action = 'na.exclude', control=lmerControl(optimizer = "optimx", calc.derivs = FALSE, optCtrl=list(method = 'nlminb')))
+summary(model.6)
+
+#confidence interval
+ci.6 <- confint(model.6,method="Wald", level=0.95)
+ci.6
+
+# group means
+femininity_total <- data %>% group_by(condition, Sex) %>%
+  summarise(mean = mean(femininity),
+            sd = sd(femininity),
+            n = n(),
+            se = sd(femininity)/sqrt(n()))
+femininity_total
+
+#plot with 95% CI
+femininity_plot <- data %>%
+  group_by(condition, Sex) %>%
+  phe_mean(x = femininity, type = "full", confidence = 0.95) %>%
+  ggplot(aes(x=Sex, y=value, fill=condition)) +
+  geom_bar(stat = "identity", position = "dodge", width = .90) +
+  geom_errorbar(aes(ymin = lowercl, ymax = uppercl), position = position_dodge(.90), width = 0.1) +
+  scale_y_continuous(limits=c(1,7), breaks=seq(1,7,by=1), oob = rescale_none) +
+  scale_fill_brewer(palette = 1) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        text = element_text(size = 10)) + # apply custom minimal theme
+  labs(title = "", x="Participant Sex (1 = Male, 2 = Female)", y="Femininity", fill="Condition")
+
+femininity_plot 
+```
+
+The interaction between condition and participant sex is not significant, *t*(149) = -0.38, *p* = .707. 
+
+# Mediation #
+
+## Relationship Between Perceived Femininity and Attraction ##
+```{r}
+# multilevel model
+model.7 <- lmer(attraction ~ femininity+ (1|ID) + (1|trial), data=data, na.action = 'na.exclude', control=lmerControl(optimizer = "optimx", calc.derivs = FALSE, optCtrl=list(method = 'nlminb')))
+summary(model.7)
+
+#confidence interval
+ci.7 <- confint(model.7,method="Wald", level=0.95)
+ci.7
+```
+
+## Multilevel Mediation - The Effect of Condition on Attractiveness Mediated by Perceived Femininity ##
+```{r}
+# detach lmerTest package (will not run otherwise)
+detach("package:lmerTest", unload=TRUE)
+
+# mediator model
+med.fit <- lmer(femininity ~ condition + (1|ID),
+                      data = data)
+
+# outcome model
+out.fit <- lmer(attraction ~ condition + femininity + (1|ID),
+                    data = data)
+
+# function to calculate indirect effect (ACME) and direct effect (ADE)
+med.out <- mediate(med.fit, out.fit, treat = "condition", mediator = "femininity",
+                      sims = 1000)
+
+summary(med.fit)
+summary(out.fit)
+summary(med.out)
+```
+
+The effect of condition on attraction ratings was fully mediated via perceived femininity. The indirect effect is -.33 (ACME), which is significant insofar as the confidence interval does not contain zero [-0.55, -0.12]. 
+
+
